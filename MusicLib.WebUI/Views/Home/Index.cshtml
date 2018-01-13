@@ -1,0 +1,143 @@
+﻿<div ng-app="mainModule" ng-controller="audioController" ng-init="init()">
+    <h3>Super-Puper-Druper Online Audio Player <small>(in fact - test task...)</small></h3>
+    <div ng-show="loadingList">
+        <h5>
+            <i class="fa fa-spinner fa-spin"></i>
+            Loading...
+        </h5>
+    </div>
+    <div ng-hide="loadingList">
+
+        <div ng-show="currentId != 0">
+            <div class="panel">
+                <div class="panel-heading">
+                    <h4>{{ currentName }}</h4>
+                </div>
+                <div class="panel-body">
+                    <audio controls autoplay preload="metadata" onended="angular.element(this).scope().songEnded()" id="audioPlayer" data-info-title="Foo" ng-src="{{'/api/audio/listen?id=' + currentId}}">
+                        An html5-capable browser is required to play this audio.
+                    </audio>
+                </div>
+            </div>
+        </div>
+
+        <div ng-show="files.length == 0">
+            <h5><i>There is no uploaded files</i></h5>
+        </div>
+        <ul class="list-group" >
+            <li class="list-group-item" ng-repeat="x in files">
+                <span ng-show="x.deleting">
+                    <i class="fa fa-spinner fa-spin"></i>
+                </span>
+                <button ng-hide="x.deleting" ng-class=" (x.Id == currentId)? 'btn btn-xs disabled btn-default' : 'btn btn-xs btn-primary' " ng-click="selectFile(x)"><i class="fa fa-play"></i></button>
+                <span ng-class="(x.Id == currentId)? 'bold' : '' ">
+                    {{ x.DisplayName }}
+                </span>
+                <button class="btn btn-danger btn-xs float-right" ng-click="deleteFile(x)"><i class="fa fa-close"></i></button>
+            </li>
+        </ul>
+        <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#uploadModal">Upload file</button>
+    </div>
+
+    
+    <div class="modal fade" id="uploadModal" role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">Upload file</h4>
+                </div>
+                <div class="modal-body">
+                    <p>- Audio file should not exceed 200 MB and be in MP3 format.</p>
+                    <p>- Audio file must not violate copyrights and related rights.</p>
+                    <div ng-hide="uploading">
+                        <input type="file" accept=".mp3" onchange="angular.element(this).scope().fileChange()" id="imageUpload" class="hide" />
+                        <label for="imageUpload" class="btn btn-primary">Pick a file</label>
+                    </div>
+                    <div ng-show="uploading">
+                        <i class="fa fa-spinner fa-spin"></i>
+                        Uploading file. Please wait...
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" ng-class=" (uploading) ? 'btn btn-default disabled' : 'btn btn-default' " data-dismiss="modal">
+                        <i ng-show="uploading" class="fa fa-spinner fa-spin"></i>
+                        Cancel
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+<script>
+
+    var app = angular.module('mainModule', []);
+
+    createApiService(app);
+
+    app.controller('audioController', function ($scope, apiService) {
+        $scope.loadingList = true;
+        $scope.uploading = false;
+        $scope.currentId = 0;
+        $scope.currentName = "";
+        $scope.files = [];
+        apiService.list.send(function (result) {
+            $scope.files = result;
+            $scope.loadingList = false;
+        });
+
+        $scope.songEnded = function () {
+            var next = $scope.files.findIndex(function (item) { return item.Id == $scope.currentId; }) + 1;
+            if (next < $scope.files.length) {
+                $scope.$apply(function () {
+                    $scope.selectFile($scope.files[next]);
+                });
+            }
+        }
+
+        $scope.fileChange = function () {
+            var controllerscope = $scope;
+            $scope.uploading = true;
+            apiService.upload.send($('#imageUpload')[0], function (result) {
+                controllerscope.files.push(result);
+                controllerscope.uploading = false;
+                $("#uploadModal").modal("hide");
+            })
+        };
+
+        $scope.selectFile = function (file) {
+            $scope.currentId = file.Id;
+            $scope.currentName = $scope.files.find(function (item) { return item.Id == file.Id; }).DisplayName;
+        };
+
+        $scope.deleteFile = function (file) {
+            BootstrapDialog.confirm({
+                title: 'Confirmation',
+                message: 'Are you sure to delete "' + file.DisplayName + '"?',
+                btnOKLabel: 'Delete',
+                btnOKClass: 'btn-danger',
+                callback: function (result) {
+                    if (result) {
+                        file.deleting = true;
+                        if (file.Id == $scope.currentId) {
+                            $scope.currentId = 0;
+                            $scope.currentName = "";
+                        }
+                        var controllerscope = $scope;
+                        apiService.delete.send(file.Id, function (result) {
+                            controllerscope.files = controllerscope.files.filter(function (item) {
+                                return item.Id != result.Id;
+                            });
+                        });
+                    }
+                }
+            });
+
+            
+        };
+    });
+
+</script>
